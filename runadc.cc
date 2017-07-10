@@ -1,6 +1,6 @@
 /**
  *
- * adctest 
+ * runadc 
  * configuration options.
  * reads a config file with the names of dcm2, part #, dcm2 configfile, dcm2 jseb , adc jseb, part jseb
  * reads adc config file with runtime parameters
