@@ -431,7 +431,7 @@ class ADC {
 
   // initialize controller
    void setBusy();
-   // bool initialize_xmit(UINT32 events);
+  bool initialize_xmit(UINT32 events);
   bool  initialize(UINT32 eventstotake);
   void setNumAdcBoards(int numboards);
   void setFirstAdcSlot(int firstdigslotnumber);

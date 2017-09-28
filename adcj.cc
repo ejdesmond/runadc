@@ -300,7 +300,7 @@ bool ADC::initialize(UINT32 eventstotake)
       usleep(10);
 
      //   set dat2control off for xmit
-     buf_send[0]=(imod <<11)+ (ichip << 8) + sp_adc_rd_cntrl + (0<<16) ;
+     buf_send[0]=(imod <<11)+ (ichip << 8) + sp_adc_rd_cntrl + (0x0<<16) ;
       i= 1;
       k= 1;
      jseb2->Write(trport2,k,px); // write 1 word dma mode
@@ -399,6 +399,396 @@ bool ADC::initialize(UINT32 eventstotake)
   return true;
 } // initialize
 
+/**
+ * initialize_xmit
+ * This initializes the adc. It started identical to initialize_exttrig. Then
+ * xmit functions are added from sphenix_adc_test_exttrig_xmit_dcm.cc
+ * Default: not writing to local data file; not reading out the dcm2 through adc
+ */
+bool ADC::initialize_xmit(UINT32 eventstotake)
+{
+  cout << "ADC initialize_xmit " << endl;
+ int   adc_data[64][32];
+    nread = 4096*2+6; /*16384 32768, 65536+4;  number of byte to be readout */
+    ifr=0;
+    iwrite =0;
+    iprint =0;
+    icheck =0;
+    istop=0;
+    isel_dcm = 0; 
+    isel_xmit = 1; // always use xmit board
+
+    nevent = eventstotake;
+
+    // this will be replaced by a function to set the starting slow of the 
+    // digitizer board for the xmit. One adc object per digitizer group
+    // the xmit is fixed after the last digitizer board
+
+    // set module location and # boards from main app
+    //imod_start = 16; // adc board in slot 16
+    //nmod = 1; // uses 1 adc module board
+
+    bool windriverstatus = false;
+    windriverstatus =  startWinDriver();
+    if (windriverstatus == false)
+      {
+	return false;
+      }
+    //printf(" number of loop \n");
+    //scanf("%d",&nloop);
+    //printf(" number of events \n");
+    //scanf("%d",&nevent);
+    nevent = eventstotake;
+     //printf(" 1st module slot number \n");
+     //scanf("%d",&imod_start);
+    //imod_start = 16; // adc board in slot 16
+     // printf(" number of FEM module \n");
+     //scanf("%d", &nmod);
+    //nmod = 1; // uses 1 adc module board
+     //printf(" type 1 to write data to file \n");
+     //scanf("%d",&iwrite);
+     if(iwrite ==1) {
+       outf = fopen("/home/phnxrc/desmond/daq/txt_output/adc_event_data.txt","w");
+     if (outf == NULL) 
+       {
+       printf("ERROR OPENING OUTPUT FILE \n");
+       return false;
+       }
+     }
+     //printf(" type 1 to use dcm module \n");
+     //scanf("%d", &isel_dcm);
+     //printf(" type 1 to use xmit \n");
+     //scanf("%d", &isel_xmit);
+
+//
+//
+//
+
+     iext_trig = 1;
+ 
+
+
+     //     nsample = 12;
+     //printf(" number of samples (<=31) \n");
+     //scanf("%d", &nsample);
+     nsample = 31;
+
+     px = buf_send;
+     py = read_array;
+//     imod =6;
+     imod_xmit = imod_start+nmod;
+     ichip=6;
+
+     //printf("Download DCM2 NOW: Type 1 to when DCM2 is downloaded \n");
+     //scanf("%d",&i);
+
+     // here download the dcm2
+     // code removed for dcm2 control
+
+
+     
+     dwAddrSpace =2;
+     u32Data = 0xf0000008;
+     dwOffset = 0x28;  // tx_mode_reg
+     WDC_WriteAddr32(hDev, dwAddrSpace, dwOffset, u32Data);
+
+     ifr=0;
+
+     // initialize --reset jseb2 
+
+     buf_send[0]=0x0;
+     buf_send[1]=0x0;
+     i=1;
+     k=1;
+     //i = pcie_send_1(hDev, i, k, px); //pcie_send_1 is for adc operations port 2
+     // i = 1 == DMA; i = 0 == single word
+     jseb2->Write(trport2,k,px);
+     // xmit operations
+
+
+     ichip = sp_xmit_sub; //1
+	 
+     //analog reset of xmit
+     buf_send[0]=(imod_xmit <<11)+ (ichip << 8) + sp_xmit_rxanalogreset + (0<<16) ;
+     //mod_xmit+dcm_last+1, ichip=1, sp_xmit_rxanalogreset = 2
+     i= 1;
+     k= 1;
+     i = pcie_send_1(hDev, i, k, px); // adc port 2 dma
+     usleep(10);
+
+     //digital reset of xmit
+     buf_send[0]=(imod_xmit <<11)+ (ichip << 8) + sp_xmit_rxdigitalreset + (0<<16) ;
+     //mod_xmit+dcm_last+1, ichip=1, sp_xmit_rxanalogreset = 3
+     i= 1;
+     k= 1;
+     i = pcie_send_1(hDev, i, k, px);
+     usleep(10);
+
+     //set byte ordinger
+
+     //printf(" do the byte ordering \n");
+     buf_send[0]=(imod_xmit <<11)+ (ichip << 8) + sp_xmit_rxbytord + (0<<16) ;
+     //mod_xmit+dcm_last+1, ichip=1, sp_xmit_rxbytord=15
+     i= 1;
+     k= 1;
+     i = pcie_send_1(hDev, i, k, px);
+     usleep(10);
+
+
+     //init xmit
+     buf_send[0]=(imod_xmit <<11)+ (ichip << 8) + sp_xmit_init + (0<<16) ;
+     //mod_xmit+dcm_last+1, ichip=1, sp_xmit_init=4
+     i= 1;
+     k= 1;
+     i = pcie_send_1(hDev, i, k, px);
+     usleep(10);
+	 
+     //printf(" xmit reset complete type 1 to continue \n");
+     //scanf("%d",&is);	
+
+
+
+     //   send init to the controller -- take adc controller out of 'run' state
+     buf_send[0]= (0x2<<8)+sp_cntrl_timing+ (sp_cntrl_init<<16);
+     i= 1;
+     k= 1;
+     i = pcie_send_1(hDev, i, k, px);
+     usleep(10);
+     //printf(" press 1 to controller init 2nd time \n");
+     //scanf("%d",&is);
+     buf_send[0]= (0x2<<8)+sp_cntrl_timing+ (sp_cntrl_init<<16);
+     i= 1;
+     k= 1;
+     i = pcie_send_1(hDev, i, k, px);
+     usleep(10);
+//   send reset to the controller -- put adc controller back in 'run' state
+     //printf(" type 1 to send reset \n");
+     //scanf("%d",&is);
+     buf_send[0]= (0x2<<8)+ sp_cntrl_timing+ (sp_cntrl_reset<<16);
+     i= 1;
+     k= 1;
+     i = pcie_send_1(hDev, i, k, px);
+     usleep(10);
+     // here is xmit_dcm start additions
+    //turn init adc controller here so don't send trigger/data to dcm until ready
+     // TODO: the adc engine is started with the sp_cntrl_reset command. So
+     // here it is running when we start the dcm2. At this point we would
+     // break up this routine to start the dcm2 .
+
+//   after initial the xmit and controller -- initialize the DCM II
+     //printf("START DCM2 Type 1 when DCM2 is started \n");
+     //scanf("%d",&i);
+#ifdef ADC_DCM_CONTROL
+     if(isel_dcm == 1) 
+       {
+	 printf(" START DCM2 \n");
+	 nmask = 0x1; /*turn non all channel */
+
+	 for (i=1; i<5; i++) 	 //loop over FPGA's #1-4
+	   {
+	     ichip=i;
+	     iadd=(imod_dcm<<11)+(ichip<<8);
+
+	     /* set module to online mode */
+	     buf_send[0]=iadd+dcm2_online+(0x1<<16); 
+	     //dcm2_online=2, 0x1 means on  
+	     ik=pcie_send(hDev,1,1,px);  // port 1 dma to dcm2
+
+	     /* set mask on for all channel*/
+	     buf_send[0]=iadd+dcm2_setmask+((nmask &0xff) <<16);  
+	     //dcm2_setmask = 3, nmask&0xff = ?? 
+	     ik=pcie_send(hDev,1,1,px);
+	   }
+	 /** work on 5th FPGA **/
+	 ichip=5;
+	 iadd=(imod_dcm<<11)+(ichip<<8);
+	 /* set module to offline mode */
+	 buf_send[0]=iadd+dcm2_online+(0x0<<16); //0x0 means off
+	 ik=pcie_send(hDev,1,1,px);
+	 /* set mask on for all channel*/
+	 buf_send[0]=iadd+dcm2_setmask+((nmask &0xff) <<16);
+	 ik=pcie_send(hDev,1,1,px);
+	 /* set dcm first module */
+	 buf_send[0]=iadd+dcm2_5_firstdcm+(0x1<<16);   // bit 0 =1 on
+	 ik=pcie_send(hDev,1,1,px);
+	 /* set last module*/
+	 buf_send[0]=iadd+dcm2_5_lastdcm+(0x1<<16);    // bit 0 =1 on
+	 ik=pcie_send(hDev,1,1,px);
+	 //still 5th fpga
+	 ichip =5;
+	 iadd=(imod_dcm<<11)+(ichip<<8);
+	 /* set run =1 */
+	 buf_send[0]=iadd+dcm2_run_on; 
+	 // turn on FPGA5 (undo the run_off from after the boot)
+	 ik=pcie_send(hDev,1,1,px);
+       } // end if dcm==1
+
+ #endif  
+    
+
+
+     // sample size defaults to 31
+//     printf(" type 1 to send sample size");
+//     scanf("%d",&is)
+
+     // iterate over the number of digitizer modules nmod
+     // the xmit board is assumed to be in the slot to the
+     // left of the last digitizer
+
+     for (ik =0; ik<nmod; ik++) {
+       //printf(" type 1 to send sample size");
+       //scanf("%d",&is);
+      imod = ik+imod_start;
+      ichip = sp_adc_slowcntl_sub;
+      buf_send[0]=(imod <<11)+ (ichip << 8) + sp_adc_evt_sample + ((nsample-1)<<16) ;
+      i= 1;
+      k= 1;
+      i = pcie_send_1(hDev, i, k, px);
+      usleep(10);
+
+//   set L1 delay  -- to 255
+      //printf(" setting L1 delay %d on module %d\n", l1_delay,imod);
+      //scanf("%d",&is);
+      
+      buf_send[0]=(imod <<11)+ (ichip << 8) + sp_adc_l1_delay + (l1_delay<<16) ;
+      //printf(" buf_send = %x\n", buf_send[0]);
+      i= 1;
+      k= 1;
+      i = pcie_send_1(hDev, i, k, px);
+      usleep(10);
+//
+//   set dat2link on for xmit 
+//
+      //printf(" type 1 to set dat2link \n");
+      //scanf("%d",&is);
+      // XMIT CHANGE
+
+      buf_send[0]=(imod <<11)+ (ichip << 8) + sp_adc_rd_link + (1<<16) ; //1 on, 0 off
+      i= 1;
+      k= 1;
+      i = pcie_send_1(hDev, i, k, px);
+      usleep(10);
+      //
+      //   set dat2control off for xmit
+      //
+      //printf(" type 1 to set dat2control off \n");
+      //scanf("%d",&is);
+      // XMIT CHANGE
+      // force use of non-xmit condition ; produces zero data output
+
+      buf_send[0]=(imod <<11)+ (ichip << 8) + sp_adc_rd_cntrl + (0<<16) ;
+      i= 1;
+      k= 1;
+      i = pcie_send_1(hDev, i, k, px);
+      usleep(10);
+      //
+      //   set pulse trigger off
+      //
+      //printf(" type 1 to send set pulse trigger \n");
+      //scanf("%d",&is);
+      buf_send[0]=(imod <<11)+ (ichip << 8) + sp_adc_sel_pulse + (0x0<<16) ;
+      i= 1;
+      k= 1;
+      i = pcie_send_1(hDev, i, k, px);
+      usleep(10);
+
+ 
+      // Here the calibration trigger is set to off when using the xmit. The exttrig only
+      // does not set the calibration trigger on or off
+      //printf(" type 1 to calib trig off \n");
+	 //scanf("%d",&is);
+	  buf_send[0]=(imod <<11)+ (ichip << 8) + sp_adc_sel_caltrig + (0x0<<16) ;
+	  i= 1;
+	  k= 1;
+	  i = pcie_send_1(hDev, i, k, px);
+	  usleep(10);
+
+
+      //
+      //   set test trigger off
+      //
+      //printf(" type 1 to send set test trigger off \n");
+      //scanf("%d",&is);
+      buf_send[0]=(imod <<11)+ (ichip << 8) + sp_adc_sel_test_trig + (0x0<<16) ;
+      i= 1;
+      k= 1;
+      i = pcie_send_1(hDev, i, k, px);
+      usleep(10);
+      //
+      //   set select L1 trigger on
+      //
+      //printf(" type 1 to select L1 trigger \n"); // 03082017 remove manual input
+      //scanf("%d",&is);
+      buf_send[0]=(imod <<11)+ (ichip << 8) + sp_adc_sel_l1 + (0x1<<16) ;
+      i= 1;
+      k= 1;
+      i = pcie_send_1(hDev, i, k, px);
+      usleep(10);
+
+ 
+      // here is a test if imod != imod_start then tunr off link_rxoff
+      // This should not be executed at any rate since there is only 1 module
+      if(imod != imod_start) 
+	   {
+	     //printf(" type 1 to link rx off if not first module");
+	     //scanf("%d",&is);
+	     ichip = sp_adc_slowcntl_sub;
+	     buf_send[0]=(imod <<11)+ (ichip << 8) + sp_adc_sel_link_rxoff + (0<<16) ;
+	     i= 1;
+	     k= 1;
+	     i = pcie_send_1(hDev, i, k, px);
+	     usleep(10);
+	     printf(" rx_off called , module %d\n", imod);
+	   } //if imod!= imod_start
+
+
+      //      printf(" set up complete type 1 to continue \n");
+      //      scanf("%d",&is);
+
+      //printf(" call adc setup  module %d\n", imod);
+      i = adc_setup(hDev,imod, 0);
+      //printf(" done with adc_setup\n", imod);
+      usleep(500);
+      //scanf("%d",&is);
+      //sp_adc_sel_link_rxoff
+     } //for ik loop over nmods
+     //sp_xmit_lastmod
+
+ 
+     // set last module location fro xmit
+ 
+	 imod = imod_xmit;
+	 ichip = sp_xmit_sub;
+	 buf_send[0]=(imod <<11)+ (ichip << 8) + sp_xmit_lastmod + (imod_start<<16) ;
+	 i= 1;
+	 k= 1;
+	 i = pcie_send_1(hDev, i, k, px);
+	 usleep(10);
+	 printf(" set last module location for xmit %d\n", imod_start);
+
+
+
+     // LOWER THE BUSY
+      buf_send[0]= (0x2<<8)+sp_cntrl_busyrst+ (0<<16);
+      i= 1;
+      k= 1;
+      i = pcie_send_1(hDev, i, k, buf_send);
+      usleep(10);
+
+      ichip = sp_adc_readback_sub ;   // controller data go to ADC input section
+      buf_send[0]=(imod<<11)+(ichip<<8)+(8) + (0x0<<16);  // 8 = "nothing" (grabbing the backplane bus)
+      i=1;
+      k=1;
+      i = pcie_send_1(hDev, i, k, buf_send);
+      usleep(10);
+      
+      // close the windriver 
+      stopWinDriver();
+       //usleep(100);
+      return true;
+     // NOW THE DCM2 is started
+//   after initial the xmit and controller -- start the DCM II
+} // initialize_xmit
 
 void ADC::setJseb2Name(string jseb2name)
 {
