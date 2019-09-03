@@ -1,19 +1,23 @@
 /**
- * adc.h
+ * adcController.h
  * Control class for sphenix digitizer ADC
- * follows the functions in Sarah Campbel's sphenix_adc_test_exttrig_xmit_dcm_busy.cc
- * This code is executed in initialize_xmit and start_xmit
+ * 
+ * 
  * Define functions to encapsulate the control of the ADC
- * 10/23/2017 
+ * Defines control functions for adc readout through the adc controller via
+ * external trigger mode and no pulse mode.
+ * 
+ * Author: Ed Desmond
+ * 8/15/2017 
  */
 
-
-#ifndef __ADC_H__
-#define __ADC_H__
+#ifndef __ADC_CONTROLLER_H__
+#define __ADC_CONTROLLER_H__
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include <string>
 #include "wdc_defs.h"
 #include "wdc_lib.h"
 #include "utils.h"
@@ -22,24 +26,24 @@
 #include "samples/shared/wdc_diag_lib.h"
 #include "pci_regs.h"
 #include "jseb2_lib.h"
-#include <string>
+
 #include "Dcm2_JSEB2.h"
-#include "Jseb2Card.h"
+//#include "Jseb2Card.h"
 #include <Dcm2_Controller.h>
 #include <dcm2_runcontrol.h>
 #include <Dcm2_Partition.h>
 #include <Dcm2_Partitioner.h>
 #include <Dcm2_Board.h>
 #include <Dcm2_BaseObject.h>
-#include <Dcm2_Reader.h>
+//#include <Dcm2_Reader.h>
 #include <Dcm2_WinDriver.h>
 #include <jseb2Controller.h>
+
 
 #include <boost/interprocess/permissions.hpp>
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/thread/mutex.hpp>
 using namespace boost::interprocess;
-
 #define DCMIUFNSIZE 256
 #define DCMIUMAXNBPARTNERS 5
 
@@ -359,7 +363,7 @@ using namespace boost::interprocess;
 #define  sp_adc_readback_transfer   1
 #define  sp_adc_readback_read       2
 #define  sp_adc_readback_status     3
-#
+
 #define  sp_adc_input_sub           2
 #define  sp_adc_slowcntl_sub        1
 
@@ -422,49 +426,48 @@ using namespace boost::interprocess;
 
 using namespace std;
 
-class ADC {
+// end defines
+
+class ADCController {
 
  public:
 
-  ADC();
-  ~ADC();
+  ADCController();
+  ~ADCController();
 
-  // initialize controller
-   void setBusy();
-  bool initialize_xmit(UINT32 events);
-  bool  initialize(UINT32 eventstotake);
-  void setNumAdcBoards(int numboards);
-  void setFirstAdcSlot(int firstdigslotnumber);
-  void setSampleSize(int samplesize);
-  void setDcm2State();
+ // initialize controller
+   bool initialize_exttrig(UINT32 events, int nwrite);
+   bool initialize_xmit(UINT32 events);
+   int adcreadout_exttrig(int eventstotake);
+   int adcreadout_nopulse(int eventstotake);
+
+   void setNumAdcBoards(int numboards);
+   void setFirstAdcSlot(int firstdigslotnumber);
+   void setSampleSize(int samplesize);
+
   void setL1Delay(int l1delay);
 
   void adcResets(int nmodindex);
   void setJseb2Name(string jseb2name);
   bool startWinDriver();
   void stopWinDriver();
-  void InitJseb2Dev();
+ 
   void freeDMAbuffer();
   void setObDatafileName(string datafilename);
   
  
   int adc_setup(WDC_DEVICE_HANDLE hDev, int imod, int iprint);
- 
-  int pcie_send_1(WDC_DEVICE_HANDLE hDev, int mode, int nword, UINT32 *buff_send);
+   void setBusy();
 
- 
- int pcie_rec_2(WDC_DEVICE_HANDLE hDev, int mode, int istart, int nword, int ipr_status, UINT32 *buff_rec);
-
-
- // start data taking
-
-
+   // start data taking
  
   void start_oevent();
-  void teststart(); // test execution while using dcm2 
- 
-private:
+  void start_exttrig_readout(); 
+  void start_nopulse_readout();
 
+  int testadccontroller_readout();
+
+ private:
  int partitionerNumb;
  char DCMIUFileName[DCMIUMAXNBPARTNERS][DCMIUFNSIZE];
  char dcmInterName[64];  // object name
@@ -477,7 +480,6 @@ private:
   WDC_DEVICE_HANDLE hDev; // jseb2 handle
   WDC_DEVICE_HANDLE hDev2; // jseb2 handle
   Dcm2_JSEB2 *jseb2;
-  Dcm2_JSEB2 *padccontroljseb2;
 
   DWORD dwAddrSpace;
   DWORD dwDMABufSize;
@@ -490,24 +492,15 @@ private:
   UINT32 u32Data;
   
 
-
   string adcJseb2Name;
  
-   // start static
+  
 
     unsigned short u16Data;
     unsigned long long u64Data, u64Data1;
  
     long imod,ichip;
-    // end static
-    unsigned short *buffp;
-    Jseb2Device *jseb2d;
-/*
-    WDC_ADDR_MODE mode;
-    WDC_ADDR_RW_OPTIONS options;
-*/
-    // start static
-    UINT32 i,j,k,ifr,nread,iprint,iwrite,ik,il,is,checksum;
+   UINT32 i,j,k,ifr,nread,iprint,iwrite,ik,il,is,checksum;
     UINT32 istop,newcmd,irand,ioffset,kword,lastchnl,ib;
     UINT32 send_array[40000],read_array[dma_buffer_size],read_array1[40000];
     UINT32 read_array_c[40000];
@@ -552,9 +545,9 @@ private:
     int   p2_delay,p2_width,itrig_pulse,p3_delay,p3_width;
     int   ich, nsample, l1_delay;
     int   conf_add,conf_data, iext_trig, igen;
-    int   imod_start, imod_end, nmod, iparity, itest_ram;
+    int   imod_start, imod_end,  iparity, itest_ram;
     int   nstep, nstep_event, ipattern, nstep_dac, idac_shaper_load;
- 
+    unsigned int nmod;
     // end static
     unsigned char    charchannel;
     unsigned char    carray[4000];
@@ -575,7 +568,8 @@ private:
     FILE *outf,*inpf;
     bool verbosity;
     bool debug;
+    bool debugFuncs;
 
+   
 };
-
-#endif
+#endif 
